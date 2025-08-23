@@ -62,7 +62,7 @@ func configureDisplays(displays []Display) Configuration {
 		fmt.Printf("%d. %s\n", i+1, display.Name)
 	}
 
-	baseIndex := promptForNumber("Select the base display (enter the number): ", 1, len(displays)) - 1
+	baseIndex := promptForNumber("Select the base display (enter the number): ", 1, len(displays), 1) - 1
 	config := Configuration{BaseDisplay: displays[baseIndex]}
 
 	remainingDisplays := append(displays[:baseIndex], displays[baseIndex+1:]...)
@@ -72,7 +72,7 @@ func configureDisplays(displays []Display) Configuration {
 		for i, display := range remainingDisplays {
 			fmt.Printf("%d. %s\n", i+1, display.Name)
 		}
-		displayIndex := promptForNumber("Select the display to configure (enter the number): ", 1, len(remainingDisplays)) - 1
+		displayIndex := promptForNumber("Select the display to configure (enter the number): ", 1, len(remainingDisplays), 1) - 1
 		display := remainingDisplays[displayIndex]
 		fmt.Printf("Configuring %s\n", display.Name)
 		display.Position = promptForPosition()
@@ -91,12 +91,18 @@ func configureDisplays(displays []Display) Configuration {
 	return config
 }
 
-func promptForNumber(prompt string, min, max int) int {
+func promptForNumber(prompt string, min, max int, defaultValue int) int {
 	reader := bufio.NewReader(os.Stdin)
 	for {
-		fmt.Print(prompt)
+		fmt.Printf("%s[%d]: ", prompt, defaultValue)
 		input, _ := reader.ReadString('\n')
 		input = strings.TrimSpace(input)
+
+		// If input is empty, return the default value
+		if input == "" {
+			return defaultValue
+		}
+
 		num := 0
 		_, err := fmt.Sscanf(input, "%d", &num)
 		if err == nil && num >= min && num <= max {
