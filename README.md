@@ -200,4 +200,4 @@ In this example, the user turns off the HDMI-2 display using default selections.
 
 ## License
 
-This project is licensed under the MIT License - see the [LICENSE](https://opensource.org/license/mit) for details.
+This project is licensed under the [MIT License](./LICENSE).
