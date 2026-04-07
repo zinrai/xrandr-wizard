@@ -12,14 +12,6 @@ xrandr-wizard simplifies the process of configuring multiple displays using xran
 - Ability to configure multiple displays in a single session
 - Smart defaults to reduce user input - press Enter to accept default selections
 
-## Installation
-
-Build the tool:
-
-```
-$ go build
-```
-
 ## Usage
 
 Run the tool by executing:
