@@ -20,6 +20,11 @@ type Configuration struct {
 }
 
 func main() {
+	if _, err := exec.LookPath("xrandr"); err != nil {
+		fmt.Println("xrandr is not installed or not in PATH")
+		os.Exit(1)
+	}
+
 	fmt.Println("Welcome to xrandr-wizard!")
 	fmt.Println("This tool will help you configure your displays using xrandr.")
 	fmt.Println("----------------------------------------------------------")
@@ -31,8 +36,7 @@ func main() {
 	}
 
 	config := configureDisplays(displays)
-	command := generateXrandrCommand(config)
-	executeCommand(command)
+	executeCommand(config)
 
 	fmt.Println("Configuration complete. Goodbye!")
 }
@@ -46,12 +50,15 @@ func getConnectedDisplays() []Display {
 	}
 
 	var displays []Display
-	lines := strings.Split(string(output), "\n")
-	for _, line := range lines {
-		if strings.Contains(line, " connected") {
-			parts := strings.Fields(line)
-			displays = append(displays, Display{Name: parts[0], Status: strings.Join(parts[2:], " ")})
+	for _, line := range strings.Split(string(output), "\n") {
+		parts := strings.Fields(line)
+		if len(parts) < 2 {
+			continue
 		}
+		if parts[1] != "connected" {
+			continue
+		}
+		displays = append(displays, Display{Name: parts[0], Status: strings.Join(parts[2:], " ")})
 	}
 	return displays
 }
@@ -65,7 +72,7 @@ func configureDisplays(displays []Display) Configuration {
 	baseIndex := promptForNumber("Select the base display (enter the number): ", 1, len(displays), 1) - 1
 	config := Configuration{BaseDisplay: displays[baseIndex]}
 
-	remainingDisplays := append(displays[:baseIndex], displays[baseIndex+1:]...)
+	remainingDisplays := removeIndex(displays, baseIndex)
 	for len(remainingDisplays) > 0 {
 		fmt.Printf("\nConfiguring display relative to %s (Base Display)\n", config.BaseDisplay.Name)
 		fmt.Println("Remaining displays to configure:")
@@ -78,17 +85,25 @@ func configureDisplays(displays []Display) Configuration {
 		display.Position = promptForPosition()
 		config.Others = append(config.Others, display)
 
-		remainingDisplays = append(remainingDisplays[:displayIndex], remainingDisplays[displayIndex+1:]...)
+		remainingDisplays = removeIndex(remainingDisplays, displayIndex)
 
-		if len(remainingDisplays) > 0 {
-			fmt.Println("Do you want to configure another display? (y/n)")
-			if !confirmContinue() {
-				break
-			}
+		if len(remainingDisplays) == 0 {
+			break
+		}
+		fmt.Println("Do you want to configure another display? (y/n)")
+		if !confirmContinue() {
+			break
 		}
 	}
 
 	return config
+}
+
+func removeIndex(s []Display, i int) []Display {
+	result := make([]Display, 0, len(s)-1)
+	result = append(result, s[:i]...)
+	result = append(result, s[i+1:]...)
+	return result
 }
 
 func promptForNumber(prompt string, min, max int, defaultValue int) int {
@@ -98,7 +113,6 @@ func promptForNumber(prompt string, min, max int, defaultValue int) int {
 		input, _ := reader.ReadString('\n')
 		input = strings.TrimSpace(input)
 
-		// If input is empty, return the default value
 		if input == "" {
 			return defaultValue
 		}
@@ -130,38 +144,38 @@ func promptForPosition() string {
 	}
 }
 
-func generateXrandrCommand(config Configuration) string {
-	command := fmt.Sprintf("xrandr --output %s --auto", config.BaseDisplay.Name)
-	for _, display := range config.Others {
-		switch display.Position {
-		case "above":
-			command += fmt.Sprintf(" --output %s --auto --above %s", display.Name, config.BaseDisplay.Name)
-		case "below":
-			command += fmt.Sprintf(" --output %s --auto --below %s", display.Name, config.BaseDisplay.Name)
-		case "left":
-			command += fmt.Sprintf(" --output %s --auto --left-of %s", display.Name, config.BaseDisplay.Name)
-		case "right":
-			command += fmt.Sprintf(" --output %s --auto --right-of %s", display.Name, config.BaseDisplay.Name)
-		case "left-rotate":
-			command += fmt.Sprintf(" --output %s --auto --left-of %s --rotate left", display.Name, config.BaseDisplay.Name)
-		case "right-rotate":
-			command += fmt.Sprintf(" --output %s --auto --right-of %s --rotate left", display.Name, config.BaseDisplay.Name)
-		case "off":
-			command += fmt.Sprintf(" --output %s --off", display.Name)
-		}
+func buildDisplayArgs(display Display, baseName string) []string {
+	switch display.Position {
+	case "above":
+		return []string{"--output", display.Name, "--auto", "--above", baseName}
+	case "below":
+		return []string{"--output", display.Name, "--auto", "--below", baseName}
+	case "left":
+		return []string{"--output", display.Name, "--auto", "--left-of", baseName}
+	case "right":
+		return []string{"--output", display.Name, "--auto", "--right-of", baseName}
+	case "left-rotate":
+		return []string{"--output", display.Name, "--auto", "--left-of", baseName, "--rotate", "left"}
+	case "right-rotate":
+		return []string{"--output", display.Name, "--auto", "--right-of", baseName, "--rotate", "right"}
+	case "off":
+		return []string{"--output", display.Name, "--off"}
 	}
-	return command
+	return nil
 }
 
-func executeCommand(command string) {
-	fmt.Println("Executing command:", command)
-	cmd := exec.Command("sh", "-c", command)
-	err := cmd.Run()
-	if err != nil {
-		fmt.Println("Error executing command:", err)
-	} else {
-		fmt.Println("Command executed successfully")
+func executeCommand(config Configuration) {
+	args := []string{"--output", config.BaseDisplay.Name, "--auto"}
+	for _, d := range config.Others {
+		args = append(args, buildDisplayArgs(d, config.BaseDisplay.Name)...)
 	}
+	fmt.Println("Executing command: xrandr", strings.Join(args, " "))
+	cmd := exec.Command("xrandr", args...)
+	if err := cmd.Run(); err != nil {
+		fmt.Println("Error executing command:", err)
+		return
+	}
+	fmt.Println("Command executed successfully")
 }
 
 func confirmContinue() bool {
@@ -171,7 +185,8 @@ func confirmContinue() bool {
 		input = strings.ToLower(strings.TrimSpace(input))
 		if input == "y" || input == "yes" {
 			return true
-		} else if input == "n" || input == "no" {
+		}
+		if input == "n" || input == "no" {
 			return false
 		}
 		fmt.Println("Invalid input. Please enter 'y' or 'n'.")
