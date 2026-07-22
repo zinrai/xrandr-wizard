@@ -26,6 +26,7 @@ func main() {
 	}
 
 	fmt.Println("Welcome to xrandr-wizard!")
+	printVersion()
 	fmt.Println("This tool will help you configure your displays using xrandr.")
 	fmt.Println("----------------------------------------------------------")
 
